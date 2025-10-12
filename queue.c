@@ -252,7 +252,78 @@ void q_reverseK(struct list_head *head, int k)
 }
 
 /* Sort elements of queue in ascending/descending order */
-void q_sort(struct list_head *head, bool descend) {}
+// static struct list_head *merge_2_queue(struct list_head *a, struct list_head
+// *b)
+// {
+//     struct list_head *head, **tail = &head;
+//     struct list_head *a_head = a, *b_head = b;
+//     element_t *a_element, *b_element;
+
+//     for (;;) {
+//         a_element = list_entry(a, element_t, list);
+//         b_element = list_entry(b, element_t, list);
+
+//         if (strcmp(a_element->value, b_element) <= 0) {
+//             *tail = a;
+//             tail = &a->next;
+//             a = a->next;
+//             if (a == a_head) {
+//                 *tail = b;
+//                 break;
+//             }
+//         } else {
+//             *tail = b;
+//             tail = &b->next;
+//             b = b->next;
+//             if (b == b_head) {
+//                 *tail = a;
+//                 break;
+//             }
+//         }
+//     }
+//     return head;
+// }
+
+// void q_sort(struct list_head *head, bool descend)
+// {
+//     // use merge sort,  make sure result is stable sorting
+// }
+
+/* Sort elements of queue in ascending/descending order */
+void q_sort(struct list_head *head, bool descend)
+{
+    // method: merge sort, make sure stable sorting
+    struct list_head list_less, list_greater;
+    element_t *pivot;
+    element_t *node = NULL;
+    element_t *safe = NULL;  // helper in for loop safe iter
+    if (list_empty(head) || list_is_singular(head))
+        return;
+
+    INIT_LIST_HEAD(&list_less);
+    INIT_LIST_HEAD(&list_greater);
+
+    pivot = list_first_entry(head, element_t, list);
+    list_del(&pivot->list);  // remove from original list
+
+    list_for_each_entry_safe(node, safe, head, list) {
+        if (strcmp(node->value, pivot->value) > 0)
+            list_move_tail(&node->list, &list_greater);
+        else
+            list_move_tail(&node->list, &list_less);
+    }
+    q_sort(&list_less, descend);
+    q_sort(&list_greater, descend);
+
+    list_add(&pivot->list, head);
+    if (descend) {
+        list_splice(&list_greater, head);
+        list_splice_tail(&list_less, head);
+    } else {
+        list_splice(&list_less, head);
+        list_splice_tail(&list_greater, head);
+    }
+}
 
 /* Remove every node which has a node with a strictly less value anywhere to
  * the right side of it */
