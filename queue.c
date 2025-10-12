@@ -19,12 +19,15 @@ struct list_head *q_new()
 /* Free all storage used by queue */
 void q_free(struct list_head *head)
 {
-    struct list_head *node = head->next;
+    struct list_head *node = NULL;
     struct list_head *next = NULL;
     element_t *node_element = NULL;
+
     if (!head) {
         return;
     }
+
+    node = head->next;
     while (node != head) {
         next = node->next;
         node_element = list_entry(node, element_t, list);
@@ -43,11 +46,25 @@ void q_free(struct list_head *head)
 /* Insert an element at head of queue */
 bool q_insert_head(struct list_head *head, char *s)
 {
-    element_t *new_element = (element_t *) malloc(sizeof(element_t));
+    element_t *new_element;
+
+    if (!head) {
+        return false;
+    }
+    new_element = (element_t *) malloc(sizeof(element_t));
+    if (!new_element) {
+        free(new_element);
+        return false;
+    }
     new_element->value = (char *) malloc(sizeof(char) * (strlen(s) + 1));
+    if (!new_element->value) {
+        free(new_element->value);
+        free(new_element);
+        return false;
+    }
+
     memcpy(new_element->value, s, sizeof(char) * (strlen(s) + 1));
     list_add(&new_element->list, head);
-
 
     return true;
 }
@@ -55,8 +72,21 @@ bool q_insert_head(struct list_head *head, char *s)
 /* Insert an element at tail of queue */
 bool q_insert_tail(struct list_head *head, char *s)
 {
-    element_t *new_element = (element_t *) malloc(sizeof(element_t));
+    element_t *new_element = NULL;
+
+    if (!head)
+        return false;
+    new_element = (element_t *) malloc(sizeof(element_t));
+    if (!new_element) {
+        free(new_element);
+        return false;
+    }
     new_element->value = (char *) malloc(sizeof(char) * (strlen(s) + 1));
+    if (!new_element->value) {
+        free(new_element->value);
+        free(new_element);
+        return false;
+    }
     memcpy(new_element->value, s, sizeof(char) * (strlen(s) + 1));
     list_add_tail(&new_element->list, head);
     return true;
@@ -68,7 +98,7 @@ element_t *q_remove_head(struct list_head *head, char *sp, size_t bufsize)
     // return the element that has been removed.
     element_t *element = NULL;
     struct list_head *node = head;
-    if (!node) {
+    if (!node || list_empty(head)) {
         return NULL;
     }
     node = node->next;
@@ -86,7 +116,7 @@ element_t *q_remove_tail(struct list_head *head, char *sp, size_t bufsize)
     // return the element that has been removed.
     element_t *element = NULL;
     struct list_head *node = head;
-    if (!node) {
+    if (!node || list_empty(head)) {
         return NULL;
     }
     node = node->prev;
@@ -101,11 +131,12 @@ element_t *q_remove_tail(struct list_head *head, char *sp, size_t bufsize)
 /* Return number of elements in queue */
 int q_size(struct list_head *head)
 {
-    struct list_head *node = head->next;
+    struct list_head *node;
     int cnt = 0;
-    if (!node) {
+    if (!head) {
         return 0;
     }
+    node = head->next;
     while (node != head) {
         node = node->next;
         cnt++;
@@ -235,26 +266,23 @@ int q_ascend(struct list_head *head)
     struct list_head *node = head->next;
     struct list_head *stack = q_new();
 
-    char max_int32_str[12];
-    int int32_max = __INT32_MAX__;
-    snprintf(max_int32_str, sizeof(max_int32_str), "%d", int32_max);
-    q_insert_tail(stack, max_int32_str);
+    char min_str[] =
+        "";  // use to simulate MIN for strcmp, empty is smallest in strcmp
+    q_insert_tail(stack, min_str);
 
     while (node != head) {
         element_t *node_element = list_entry(node, element_t, list);
         element_t *top_element = list_entry(stack->prev, element_t, list);
         struct list_head *next = node->next;
-        int node_val = atoi(node_element->value);
-        int top_val = atoi(top_element->value);
 
-        while (top_val < node_val) {
+        // accord to do_ascend in q_test.c, compare should use this expression
+        while (strcmp(node_element->value, top_element->value) < 0) {
             list_del(stack->prev);
             free(top_element->value);
             free(top_element);
 
             // update new top
             top_element = list_entry(stack->prev, element_t, list);
-            top_val = atoi(top_element->value);
         };
         list_del(node);              // remove from original queue
         list_add_tail(node, stack);  // add to ascend stack, beware of
@@ -281,13 +309,122 @@ int q_ascend(struct list_head *head)
 int q_descend(struct list_head *head)
 {
     // https://leetcode.com/problems/remove-nodes-from-linked-list/
-    return 0;
+    if (!head || list_empty(head))
+        return 0;
+
+    struct list_head *node = head->next;
+    struct list_head *stack = q_new();
+
+    char max_str[64];  // use to simulate MAX for strcmp
+    memset(max_str, 0xFF, sizeof(char) * 63);
+    max_str[63] = '\0';
+    q_insert_tail(stack, max_str);
+
+    while (node != head) {
+        element_t *node_element = list_entry(node, element_t, list);
+        element_t *top_element = list_entry(stack->prev, element_t, list);
+        struct list_head *next = node->next;
+
+        // accord to do_ascend in q_test.c, compare should use this expression
+        while (strcmp(node_element->value, top_element->value) > 0) {
+            list_del(stack->prev);
+            free(top_element->value);
+            free(top_element);
+
+            // update new top
+            top_element = list_entry(stack->prev, element_t, list);
+        };
+        list_del(node);              // remove from original queue
+        list_add_tail(node, stack);  // add to ascend stack, beware of
+                                     // LIST_POISONING enable!
+        node = next;
+    }
+
+    // replace stack head to queue head
+    head->next = (stack->next->next);  // ignore (top)int_max
+    (stack->next->next)->prev = head;
+    head->prev = stack->prev;
+    stack->prev->next = head;
+
+    // stack remove helper
+    stack->next->next = stack;
+    stack->prev = stack->next;
+    // remove stack component
+    q_free(stack);
+    return q_size(head);
 }
 
 /* Merge all the queues into one sorted queue, which is in ascending/descending
  * order */
+static struct list_head *q_ctx_cmp(struct list_head *head, bool descend)
+{
+    if (!head || list_empty(head)) {
+        return NULL;
+    }
+
+    queue_contex_t *q_ctx_cur, *q_ctx_safe;
+    element_t *extrem_1st_element, *cur_1st_element;
+    char max_str[64];
+    element_t max_element = {.value = max_str};
+
+    memset(max_str, 0xFF, sizeof(char) * 63);
+    max_str[63] = '\0';
+    extrem_1st_element = &max_element;
+
+    list_for_each_entry_safe(q_ctx_cur, q_ctx_safe, head, chain) {
+        if (!q_ctx_cur->q || list_empty(q_ctx_cur->q)) {
+            // no element, do nothing
+        } else {
+            cur_1st_element = list_first_entry(q_ctx_cur->q, element_t, list);
+            if (strcmp(extrem_1st_element->value, cur_1st_element->value) >=
+                0) {
+                extrem_1st_element = cur_1st_element;
+            }
+        }
+    }
+    list_del(&extrem_1st_element->list);
+    return &extrem_1st_element->list;
+}
+
+static bool q_is_all_empty(struct list_head *head)
+{
+    queue_contex_t *q_ctx_cur, *q_ctx_safe;
+
+    list_for_each_entry_safe(q_ctx_cur, q_ctx_safe, head, chain) {
+        if (!list_empty(q_ctx_cur->q))
+            return false;
+    }
+    return true;
+}
 int q_merge(struct list_head *head, bool descend)
 {
     // https://leetcode.com/problems/merge-k-sorted-lists/
-    return 0;
+    struct list_head merged_head;
+    queue_contex_t *q_ctx_1st_entry =
+        list_first_entry(head, queue_contex_t, chain);
+
+    INIT_LIST_HEAD(&merged_head);
+    while (!q_is_all_empty(head)) {
+        struct list_head *extrem_node = q_ctx_cmp(head, descend);
+        if (descend)
+            list_add(extrem_node, &merged_head);
+        else
+            list_add_tail(extrem_node, &merged_head);
+
+        // printf("show merged list:");
+        // list_for_each_entry_safe(node, safe, &merged_head, list) {
+        //     printf("%s, ", node->value);
+        // }
+        // printf("\r\n");
+    }
+
+    list_splice(&merged_head, q_ctx_1st_entry->q);
+
+    // printf("show result list:");
+    // list_for_each_entry_safe(node, safe, q_ctx_1st_entry->q, list) {
+    //     printf("%s, ", node->value);
+    // }
+    // printf("\r\n");
+
+    return q_size(q_ctx_1st_entry->q);
 }
